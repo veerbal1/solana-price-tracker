@@ -4,11 +4,17 @@ import { fetchSolPrice } from "./birdeye";
 
 export const run = async () => {
   try {
-    // Fetch SOL price
-    const price = await fetchSolPrice();
-    
     // Get price range configuration from Redis
     const priceConfig = await getPriceRange();
+    
+    // Check if alerts are active first - skip everything if inactive
+    if (!priceConfig.isActive) {
+      console.log("Price alerts are disabled. Skipping all processing.");
+      return;
+    }
+
+    // Fetch SOL price only if alerts are active
+    const price = await fetchSolPrice();
     
     if (price === null) {
       console.warn("Price not available. Skipping alert check.");
@@ -23,12 +29,6 @@ export const run = async () => {
     const upperThreshold = priceConfig.upperPrice ?? 196;
 
     console.log(`Using thresholds: lower=${lowerThreshold}, upper=${upperThreshold}`);
-
-    // Check if alerts are active
-    if (!priceConfig.isActive) {
-      console.log("Price alerts are disabled. Skipping alert check.");
-      return;
-    }
 
     if (price <= lowerThreshold || price >= upperThreshold) {
       let alertText: string;
