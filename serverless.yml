@@ -1,0 +1,25 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: undercoverdevs
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: solana-price-tracker
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: solana-price-tracker
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  environment: 
+    CHAT_ID: ${env:CHAT_ID}
+    TELEGRAM_BOT_API: ${env:TELEGRAM_BOT_API}
+    BIRDEYE_TOKEN: ${env:BIRDEYE_TOKEN}
+
+functions:
+  rateHandler:
+    handler: handler.run
+    events:
+      - schedule: rate(1 minute)
+
+build:
+  esbuild:
+    bundle: true
+    minify: true
