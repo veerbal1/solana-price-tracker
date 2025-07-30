@@ -1,67 +1,32 @@
+import { getPriceRange, setCurrentPrice } from "./redis";
+import { sendTelegram } from "./telegram";
+import { fetchSolPrice } from "./birdeye";
+
 export const run = async () => {
-  // Fetch the current SOL price from Birdeye and log the response
-  const options = {
-    method: "GET",
-    headers: {
-      accept: "application/json",
-      "x-chain": "solana",
-      "X-API-KEY": (globalThis as any).process?.env?.BIRDEYE_TOKEN ?? "",
-    },
-  } as any;
-
-  const endpoint =
-    "https://public-api.birdeye.so/defi/price?address=So11111111111111111111111111111111111111112&ui_amount_mode=raw";
-
-  // Helper to send a Telegram message
-  const sendTelegram = async (text: string) => {
-    const telegramToken = (globalThis as any).process?.env?.TELEGRAM_BOT_API;
-    const chatId = (globalThis as any).process?.env?.CHAT_ID;
-
-    if (!telegramToken || !chatId) {
-      console.warn(
-        "TELEGRAM_BOT_API or CHAT_ID env variables are not set. Skipping Telegram notification."
-      );
+  try {
+    // Fetch SOL price
+    const price = await fetchSolPrice();
+    
+    // Get price range configuration from Redis
+    const priceConfig = await getPriceRange();
+    
+    if (price === null) {
+      console.warn("Price not available. Skipping alert check.");
       return;
     }
 
-    const telegramEndpoint = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+    // Save current price to Redis
+    await setCurrentPrice(price);
 
-    try {
-      const resp = await fetch(telegramEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      });
+    // Use fallback values if Redis doesn't have the thresholds set
+    const lowerThreshold = priceConfig.lowerPrice ?? 177;
+    const upperThreshold = priceConfig.upperPrice ?? 196;
 
-      if (!resp.ok) {
-        console.error(`Telegram API responded with status ${resp.status}`);
-      } else {
-        console.log("Telegram message sent successfully");
-      }
-    } catch (err) {
-      console.error("Failed to send message to Telegram:", err);
-    }
-  };
+    console.log(`Using thresholds: lower=${lowerThreshold}, upper=${upperThreshold}`);
 
-  try {
-    const response = await fetch(endpoint, options);
-
-    if (!response.ok) {
-      throw new Error(`Birdeye API responded with status ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    console.log("Birdeye price data:", JSON.stringify(data, null, 2));
-
-    // ----------------- Send Telegram message -----------------
-    const price = data?.data?.value ?? null;
-
-    const lowerThreshold = 177;
-    const upperThreshold = 196;
-
-    if (price === null) {
-      console.warn("Price not available. Skipping alert check.");
+    // Check if alerts are active
+    if (!priceConfig.isActive) {
+      console.log("Price alerts are disabled. Skipping alert check.");
       return;
     }
 
@@ -80,7 +45,7 @@ export const run = async () => {
       console.log(`Price $${price} within threshold; no alert sent.`);
     }
   } catch (error) {
-    console.error("Failed to fetch SOL price from Birdeye:", error);
+    console.error("Error in price monitoring:", error);
     await sendTelegram(`❗ Error fetching SOL price or processing alert: ${error}`);
   }
 };
