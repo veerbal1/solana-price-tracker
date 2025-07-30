@@ -1,6 +1,6 @@
-import { getPriceRange, setCurrentPrice } from "./redis";
-import { sendTelegram } from "./telegram";
-import { fetchSolPrice } from "./birdeye";
+import { getPriceRange, setCurrentPrice } from "./lib/redis";
+import { sendTelegram } from "./lib/telegram";
+import { fetchSolPrice } from "./lib/birdeye";
 
 export const run = async () => {
   try {
