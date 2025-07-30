@@ -12,6 +12,37 @@ export const run = async () => {
   const endpoint =
     "https://public-api.birdeye.so/defi/price?address=So11111111111111111111111111111111111111112&ui_amount_mode=raw";
 
+  // Helper to send a Telegram message
+  const sendTelegram = async (text: string) => {
+    const telegramToken = (globalThis as any).process?.env?.TELEGRAM_BOT_API;
+    const chatId = (globalThis as any).process?.env?.CHAT_ID;
+
+    if (!telegramToken || !chatId) {
+      console.warn(
+        "TELEGRAM_BOT_API or CHAT_ID env variables are not set. Skipping Telegram notification."
+      );
+      return;
+    }
+
+    const telegramEndpoint = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+
+    try {
+      const resp = await fetch(telegramEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      });
+
+      if (!resp.ok) {
+        console.error(`Telegram API responded with status ${resp.status}`);
+      } else {
+        console.log("Telegram message sent successfully");
+      }
+    } catch (err) {
+      console.error("Failed to send message to Telegram:", err);
+    }
+  };
+
   try {
     const response = await fetch(endpoint, options);
 
@@ -25,18 +56,6 @@ export const run = async () => {
 
     // ----------------- Send Telegram message -----------------
     const price = data?.data?.value ?? null;
-
-    const telegramToken = (globalThis as any).process?.env?.TELEGRAM_BOT_API;
-    const chatId = (globalThis as any).process?.env?.CHAT_ID;
-
-    if (!telegramToken || !chatId) {
-      console.warn(
-        "TELEGRAM_BOT_API or CHAT_ID env variables are not set. Skipping Telegram notification."
-      );
-      return;
-    }
-
-    const telegramEndpoint = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
 
     const lowerThreshold = 177;
     const upperThreshold = 196;
@@ -56,32 +75,12 @@ export const run = async () => {
         alertText = `🚀 SOL price surged above $${upperThreshold}.\nCurrent price: $${formattedPrice} 📈\nYour liquidity position may be out of range. Consider removing liquidity or repositioning accordingly.`;
       }
 
-      const telegramBody = {
-        chat_id: chatId,
-        text: alertText,
-      };
-
-      try {
-        const telegramResp = await fetch(telegramEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(telegramBody),
-        });
-
-        if (!telegramResp.ok) {
-          throw new Error(
-            `Telegram API responded with status ${telegramResp.status}`
-          );
-        }
-
-        console.log("Telegram alert sent successfully");
-      } catch (err) {
-        console.error("Failed to send alert to Telegram:", err);
-      }
+      await sendTelegram(alertText);
     } else {
       console.log(`Price $${price} within threshold; no alert sent.`);
     }
   } catch (error) {
     console.error("Failed to fetch SOL price from Birdeye:", error);
+    await sendTelegram(`❗ Error fetching SOL price or processing alert: ${error}`);
   }
 };
